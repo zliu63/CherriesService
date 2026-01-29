@@ -49,8 +49,8 @@ cd ~/Projects/CherriesService
 ### 2. Create virtual environment
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+pyenv virtualenv 3.12.10 cherries-service
+pyenv activate cherries-service
 ```
 
 ### 3. Install dependencies
