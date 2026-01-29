@@ -30,8 +30,8 @@
 cd ~/Projects/CherriesService
 
 # Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+pyenv virtualenv 3.12.10 cherries-service
+pyenv activate cherries-service
 
 # Install dependencies
 pip install -r requirements.txt
