@@ -122,13 +122,9 @@ CREATE POLICY "Quest creators can manage tasks"
     );
 
 -- Quest participants policies
-CREATE POLICY "Users can view participants of their quests"
+CREATE POLICY "Users can view their own participant records"
     ON quest_participants FOR SELECT
-    USING (
-        quest_id IN (
-            SELECT quest_id FROM quest_participants WHERE user_id = auth.uid()
-        )
-    );
+    USING (user_id = auth.uid());
 
 CREATE POLICY "Users can join quests"
     ON quest_participants FOR INSERT

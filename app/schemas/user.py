@@ -1,6 +1,11 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
+
+
+class AvatarData(BaseModel):
+    type: Literal["emoji", "preset", "custom"]
+    value: str
 
 
 class UserBase(BaseModel):
@@ -19,6 +24,7 @@ class UserLogin(BaseModel):
 
 class UserResponse(UserBase):
     id: str
+    avatar: Optional[AvatarData] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -33,3 +39,8 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None
+
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    avatar: Optional[AvatarData] = None

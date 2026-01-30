@@ -1,39 +1,26 @@
 from supabase import create_client, Client
+from fastapi import Header
 from app.core.config import settings
 
 
-class SupabaseClient:
-    """Supabase client singleton"""
+def get_supabase(authorization: str = Header(None)) -> Client:
+    """
+    Dependency for getting Supabase client with user auth context.
 
-    _client: Client = None
-    _service_client: Client = None
+    Automatically extracts JWT token from Authorization header and sets it
+    on the client, enabling Row Level Security (RLS) policies to work correctly.
+    """
+    # Create a new client instance for each request
+    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
-    @classmethod
-    def get_client(cls) -> Client:
-        """Get Supabase client with publishable key (for user operations)"""
-        if cls._client is None:
-            cls._client = create_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_KEY
-            )
-        return cls._client
+    # If JWT token exists, set auth context for RLS
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "")
+        client.postgrest.auth(token)
 
-    @classmethod
-    def get_service_client(cls) -> Client:
-        """Get Supabase client with secret key (for admin operations)"""
-        if cls._service_client is None:
-            cls._service_client = create_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_SERVICE_KEY
-            )
-        return cls._service_client
-
-
-def get_supabase() -> Client:
-    """Dependency for getting Supabase client"""
-    return SupabaseClient.get_client()
+    return client
 
 
 def get_supabase_service() -> Client:
-    """Dependency for getting Supabase service client"""
-    return SupabaseClient.get_service_client()
+    """Dependency for getting Supabase service client (admin operations)"""
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
