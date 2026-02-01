@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 def generate_share_code() -> str:
@@ -10,9 +10,9 @@ def generate_share_code() -> str:
 
 def get_share_code_expiry(days: int = 3) -> datetime:
     """Get share code expiration datetime (default 3 days from now)."""
-    return datetime.utcnow() + timedelta(days=days)
+    return datetime.now(timezone.utc) + timedelta(days=days)
 
 
 def is_share_code_valid(expires_at: datetime) -> bool:
     """Check if share code is still valid."""
-    return datetime.utcnow() < expires_at
+    return datetime.now(timezone.utc) < expires_at

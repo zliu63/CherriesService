@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
+from datetime import datetime
 
 from app.core.auth_context import CherriesUser, get_user
 from app.core.supabase import SupabaseClient, get_supabase_client
@@ -216,7 +217,6 @@ async def join_quest(
             )
 
         # Check if share code is expired
-        from datetime import datetime
         expires_at = datetime.fromisoformat(quest.data["share_code_expires_at"])
         if not is_share_code_valid(expires_at):
             raise HTTPException(
