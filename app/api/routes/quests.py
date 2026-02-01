@@ -256,3 +256,48 @@ async def join_quest(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.delete("/{quest_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quest(
+    quest_id: str,
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
+):
+    """Delete a quest. Only the creator can delete their quest."""
+    try:
+        # First, verify the quest exists and get its creator_id
+        quest = supabase.table("quests")\
+            .select("id, creator_id")\
+            .eq("id", quest_id)\
+            .single()\
+            .execute()
+
+        if not quest.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quest not found"
+            )
+
+        # Check if the current user is the creator
+        if quest.data["creator_id"] != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the quest creator can delete this quest"
+            )
+
+        # Delete the quest (cascades to daily_tasks, quest_participants, and check_ins)
+        supabase.table("quests")\
+            .delete()\
+            .eq("id", quest_id)\
+            .execute()
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
