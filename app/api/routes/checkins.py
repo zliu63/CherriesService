@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from datetime import date
-from app.core.supabase import AuthContext, get_auth_context
+
+from app.core.auth_context import CherriesUser, get_user
+from app.core.supabase import SupabaseClient, get_supabase_client
 from app.schemas import CheckInCreate, CheckInResponse, CheckInStats
 
 router = APIRouter(prefix="/checkins", tags=["Check-ins"])
@@ -10,15 +12,16 @@ router = APIRouter(prefix="/checkins", tags=["Check-ins"])
 @router.post("", response_model=CheckInResponse, status_code=status.HTTP_201_CREATED)
 async def create_checkin(
     checkin_data: CheckInCreate,
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Create a new check-in"""
     try:
         # Verify user is a participant of the quest
-        participant = auth.supabase.table("quest_participants")\
+        participant = supabase.table("quest_participants")\
             .select("*")\
             .eq("quest_id", checkin_data.quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         if not participant.data:
@@ -28,9 +31,9 @@ async def create_checkin(
             )
 
         # Check if already checked in for this task today
-        existing = auth.supabase.table("check_ins")\
+        existing = supabase.table("check_ins")\
             .select("*")\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .eq("daily_task_id", checkin_data.daily_task_id)\
             .eq("check_in_date", checkin_data.check_in_date.isoformat())\
             .execute()
@@ -42,7 +45,7 @@ async def create_checkin(
             )
 
         # Get task points
-        task = auth.supabase.table("daily_tasks")\
+        task = supabase.table("daily_tasks")\
             .select("points")\
             .eq("id", checkin_data.daily_task_id)\
             .single()\
@@ -51,8 +54,8 @@ async def create_checkin(
         points_earned = task.data["points"]
 
         # Create check-in
-        checkin = auth.supabase.table("check_ins").insert({
-            "user_id": auth.user_id,
+        checkin = supabase.table("check_ins").insert({
+            "user_id": user.id,
             "quest_id": checkin_data.quest_id,
             "daily_task_id": checkin_data.daily_task_id,
             "check_in_date": checkin_data.check_in_date.isoformat(),
@@ -62,10 +65,10 @@ async def create_checkin(
 
         # Update participant's total points
         current_points = participant.data[0]["total_points"]
-        auth.supabase.table("quest_participants")\
+        supabase.table("quest_participants")\
             .update({"total_points": current_points + points_earned})\
             .eq("quest_id", checkin_data.quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         return checkin.data[0]
@@ -82,15 +85,16 @@ async def create_checkin(
 @router.get("/quest/{quest_id}", response_model=List[CheckInResponse])
 async def get_quest_checkins(
     quest_id: str,
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Get all check-ins for a quest"""
     try:
         # Verify user is a participant
-        participant = auth.supabase.table("quest_participants")\
+        participant = supabase.table("quest_participants")\
             .select("*")\
             .eq("quest_id", quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         if not participant.data:
@@ -100,10 +104,10 @@ async def get_quest_checkins(
             )
 
         # Get check-ins
-        checkins = auth.supabase.table("check_ins")\
+        checkins = supabase.table("check_ins")\
             .select("*")\
             .eq("quest_id", quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .order("check_in_date", desc=True)\
             .execute()
 
@@ -121,15 +125,16 @@ async def get_quest_checkins(
 @router.get("/stats/{quest_id}", response_model=CheckInStats)
 async def get_checkin_stats(
     quest_id: str,
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Get check-in statistics for a quest"""
     try:
         # Verify user is a participant
-        participant = auth.supabase.table("quest_participants")\
+        participant = supabase.table("quest_participants")\
             .select("*")\
             .eq("quest_id", quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         if not participant.data:
@@ -139,10 +144,10 @@ async def get_checkin_stats(
             )
 
         # Get all check-ins
-        checkins = auth.supabase.table("check_ins")\
+        checkins = supabase.table("check_ins")\
             .select("*")\
             .eq("quest_id", quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .order("check_in_date", desc=False)\
             .execute()
 
@@ -178,7 +183,7 @@ async def get_checkin_stats(
 
         return CheckInStats(
             quest_id=quest_id,
-            user_id=auth.user_id,
+            user_id=user.id,
             total_check_ins=total_check_ins,
             total_points=total_points,
             current_streak=current_streak,

@@ -1,34 +1,30 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from supabase import Client
-from app.core.supabase import AuthContext, get_auth_context, get_supabase_service
+
+from app.core.auth_context import CherriesUser, get_user
+from app.core.supabase import SupabaseClient, get_supabase_client
 from app.schemas.user import UserResponse, UserUpdate, AvatarData
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
 
-
 @router.get("", response_model=UserResponse)
-async def get_profile(
-    auth: AuthContext = Depends(get_auth_context)
-):
+async def get_profile(user: CherriesUser = Depends(get_user)):
     """Get current user profile"""
     try:
         # Extract avatar from user_metadata
-        avatar_data = auth.user.user_metadata.get("avatar")
+        avatar_data = user.user_metadata.get("avatar")
         avatar = None
         if avatar_data and isinstance(avatar_data, dict):
             avatar = AvatarData(**avatar_data)
 
-        user = UserResponse(
-            id=auth.user.id,
-            email=auth.user.email,
-            username=auth.user.user_metadata.get("username"),
+        return UserResponse(
+            id=user.id,
+            email=user.email,
+            username=user.user_metadata.get("username"),
             avatar=avatar,
-            created_at=auth.user.created_at,
-            updated_at=auth.user.updated_at
+            created_at=user.created_at,
+            updated_at=user.updated_at
         )
-
-        return user
 
     except Exception as e:
         raise HTTPException(
@@ -40,13 +36,13 @@ async def get_profile(
 @router.patch("", response_model=UserResponse)
 async def update_profile(
     update_data: UserUpdate,
-    auth: AuthContext = Depends(get_auth_context),
-    service_supabase: Client = Depends(get_supabase_service)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Update user profile (avatar, username)"""
     try:
         # Get current user metadata
-        user_metadata = dict(auth.user.user_metadata) if auth.user.user_metadata else {}
+        user_metadata = dict(user.user_metadata) if user.user_metadata else {}
 
         # Update username if provided
         if update_data.username is not None:
@@ -57,8 +53,8 @@ async def update_profile(
             user_metadata["avatar"] = update_data.avatar.model_dump()
 
         # Update user metadata using service client (admin privileges)
-        updated_user = service_supabase.auth.admin.update_user_by_id(
-            auth.user_id,
+        updated_user = supabase.auth.admin.update_user_by_id(
+            user.id,
             {"user_metadata": user_metadata}
         )
 
@@ -68,7 +64,7 @@ async def update_profile(
         if avatar_data and isinstance(avatar_data, dict):
             avatar = AvatarData(**avatar_data)
 
-        user = UserResponse(
+        return UserResponse(
             id=updated_user.user.id,
             email=updated_user.user.email,
             username=updated_user.user.user_metadata.get("username") if updated_user.user.user_metadata else None,
@@ -76,8 +72,6 @@ async def update_profile(
             created_at=updated_user.user.created_at,
             updated_at=updated_user.user.updated_at
         )
-
-        return user
 
     except Exception as e:
         raise HTTPException(

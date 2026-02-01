@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from supabase import Client
-from app.core.supabase import AuthContext, get_auth_context, get_supabase_service
+
+from app.core.auth_context import CherriesUser, get_user
+from app.core.supabase import SupabaseClient, get_supabase_client
 from app.schemas import UserCreate, UserLogin, Token, UserResponse
 from app.schemas.user import AvatarData
 
@@ -10,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
-    supabase: Client = Depends(get_supabase_service)
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Register a new user"""
     try:
@@ -63,7 +64,7 @@ async def register(
 @router.post("/login", response_model=Token)
 async def login(
     credentials: UserLogin,
-    supabase: Client = Depends(get_supabase_service)
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Login user"""
     try:
@@ -107,10 +108,13 @@ async def login(
 
 
 @router.post("/logout")
-async def logout(auth: AuthContext = Depends(get_auth_context)):
+async def logout(
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
+):
     """Logout user"""
     try:
-        auth.supabase.auth.sign_out()
+        supabase.auth.sign_out()
         return {"message": "Successfully logged out"}
     except Exception as e:
         raise HTTPException(

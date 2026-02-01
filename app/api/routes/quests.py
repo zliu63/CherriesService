@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
-from app.core.supabase import AuthContext, get_auth_context
+from typing import List
+
+from app.core.auth_context import CherriesUser, get_user
+from app.core.supabase import SupabaseClient, get_supabase_client
 from app.core.utils import generate_share_code, get_share_code_expiry, is_share_code_valid
 from app.schemas import (
     QuestCreate,
@@ -15,7 +17,8 @@ router = APIRouter(prefix="/quests", tags=["Quests"])
 @router.post("", response_model=QuestResponse, status_code=status.HTTP_201_CREATED)
 async def create_quest(
     quest_data: QuestCreate,
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Create a new quest"""
     try:
@@ -23,12 +26,12 @@ async def create_quest(
         share_code = generate_share_code()
         share_code_expires_at = get_share_code_expiry()
         # Create quest
-        quest_response = auth.supabase.table("quests").insert({
+        quest_response = supabase.table("quests").insert({
             "name": quest_data.name,
             "description": quest_data.description,
             "start_date": quest_data.start_date.isoformat(),
             "end_date": quest_data.end_date.isoformat(),
-            "creator_id": auth.user_id,
+            "creator_id": user.id,
             "share_code": share_code,
             "share_code_expires_at": share_code_expires_at.isoformat()
         }).execute()
@@ -39,7 +42,7 @@ async def create_quest(
         daily_tasks = []
         if quest_data.daily_tasks:
             for task in quest_data.daily_tasks:
-                task_response = auth.supabase.table("daily_tasks").insert({
+                task_response = supabase.table("daily_tasks").insert({
                     "quest_id": quest["id"],
                     "title": task.title,
                     "description": task.description,
@@ -48,9 +51,9 @@ async def create_quest(
                 daily_tasks.append(task_response.data[0])
 
         # Add creator as participant
-        auth.supabase.table("quest_participants").insert({
+        supabase.table("quest_participants").insert({
             "quest_id": quest["id"],
-            "user_id": auth.user_id
+            "user_id": user.id
         }).execute()
 
         quest["daily_tasks"] = daily_tasks
@@ -68,14 +71,15 @@ async def create_quest(
 
 @router.get("", response_model=List[QuestResponse])
 async def get_user_quests(
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Get all quests for the current user"""
     try:
         # Get quest IDs for user
-        participants = auth.supabase.table("quest_participants")\
+        participants = supabase.table("quest_participants")\
             .select("quest_id")\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         quest_ids = [p["quest_id"] for p in participants.data]
@@ -84,7 +88,7 @@ async def get_user_quests(
             return []
 
         # Get quests with daily tasks
-        quests = auth.supabase.table("quests")\
+        quests = supabase.table("quests")\
             .select("*, daily_tasks(*)")\
             .in_("id", quest_ids)\
             .execute()
@@ -101,15 +105,16 @@ async def get_user_quests(
 @router.get("/{quest_id}", response_model=QuestResponse)
 async def get_quest(
     quest_id: str,
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Get a specific quest"""
     try:
         # Verify user is a participant
-        participant = auth.supabase.table("quest_participants")\
+        participant = supabase.table("quest_participants")\
             .select("*")\
             .eq("quest_id", quest_id)\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         if not participant.data:
@@ -119,7 +124,7 @@ async def get_quest(
             )
 
         # Get quest with daily tasks
-        quest = auth.supabase.table("quests")\
+        quest = supabase.table("quests")\
             .select("*, daily_tasks(*)")\
             .eq("id", quest_id)\
             .single()\
@@ -139,12 +144,13 @@ async def get_quest(
 @router.post("/join", response_model=QuestParticipantResponse)
 async def join_quest(
     join_data: QuestJoinRequest,
-    auth: AuthContext = Depends(get_auth_context)
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Join a quest using share code"""
     try:
         # Find quest by share code
-        quest = auth.supabase.table("quests")\
+        quest = supabase.table("quests")\
             .select("*")\
             .eq("share_code", join_data.share_code)\
             .single()\
@@ -166,10 +172,10 @@ async def join_quest(
             )
 
         # Check if user is already a participant
-        existing = auth.supabase.table("quest_participants")\
+        existing = supabase.table("quest_participants")\
             .select("*")\
             .eq("quest_id", quest.data["id"])\
-            .eq("user_id", auth.user_id)\
+            .eq("user_id", user.id)\
             .execute()
 
         if existing.data:
@@ -179,9 +185,9 @@ async def join_quest(
             )
 
         # Add user as participant
-        participant = auth.supabase.table("quest_participants").insert({
+        participant = supabase.table("quest_participants").insert({
             "quest_id": quest.data["id"],
-            "user_id": auth.user_id
+            "user_id": user.id
         }).execute()
 
         return participant.data[0]
