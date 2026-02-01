@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
-from app.core.utils import AuthContext, get_auth_context, generate_share_code, get_share_code_expiry, is_share_code_valid
+from app.core.supabase import AuthContext, get_auth_context
+from app.core.utils import generate_share_code, get_share_code_expiry, is_share_code_valid
 from app.schemas import (
     QuestCreate,
     QuestResponse,

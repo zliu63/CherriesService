@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from datetime import date
-from app.core.utils import AuthContext, get_auth_context
+from app.core.supabase import AuthContext, get_auth_context
 from app.schemas import CheckInCreate, CheckInResponse, CheckInStats
 
 router = APIRouter(prefix="/checkins", tags=["Check-ins"])

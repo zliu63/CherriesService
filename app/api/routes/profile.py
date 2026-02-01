@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from supabase import Client
-from app.core.supabase import get_supabase_service
-from app.core.utils import AuthContext, get_auth_context
+from app.core.supabase import AuthContext, get_auth_context, get_supabase_service
 from app.schemas.user import UserResponse, UserUpdate, AvatarData
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
