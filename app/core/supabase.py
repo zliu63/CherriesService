@@ -12,3 +12,7 @@ _service_client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE
 def get_supabase_client() -> SupabaseClient:
     """Get Supabase service client (bypasses RLS)."""
     return _service_client
+
+def get_anon_client() -> SupabaseClient:
+    """Get Supabase user client (enabled RLS)."""
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)

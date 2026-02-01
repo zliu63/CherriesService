@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth_context import CherriesUser, get_user
-from app.core.supabase import SupabaseClient, get_supabase_client
+from app.core.supabase import SupabaseClient, get_supabase_client, get_anon_client
 from app.schemas import UserCreate, UserLogin, Token, UserResponse
 from app.schemas.user import AvatarData
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
-    supabase: SupabaseClient = Depends(get_supabase_client)
+    supabase: SupabaseClient = Depends(get_anon_client)
 ):
     """Register a new user"""
     try:
@@ -64,7 +64,7 @@ async def register(
 @router.post("/login", response_model=Token)
 async def login(
     credentials: UserLogin,
-    supabase: SupabaseClient = Depends(get_supabase_client)
+    supabase: SupabaseClient = Depends(get_anon_client)
 ):
     """Login user"""
     try:
@@ -110,7 +110,7 @@ async def login(
 @router.post("/logout")
 async def logout(
     user: CherriesUser = Depends(get_user),
-    supabase: SupabaseClient = Depends(get_supabase_client)
+    supabase: SupabaseClient = Depends(get_anon_client)
 ):
     """Logout user"""
     try:
