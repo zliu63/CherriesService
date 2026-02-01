@@ -4,7 +4,8 @@ from .user import (
     UserLogin,
     UserResponse,
     Token,
-    TokenData
+    TokenData,
+    RefreshTokenRequest
 )
 from .quest import (
     DailyTaskBase,
@@ -30,6 +31,7 @@ __all__ = [
     "UserResponse",
     "Token",
     "TokenData",
+    "RefreshTokenRequest",
     "DailyTaskBase",
     "DailyTaskCreate",
     "DailyTaskResponse",

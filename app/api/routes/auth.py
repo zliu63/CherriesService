@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth_context import CherriesUser, get_user
 from app.core.supabase import SupabaseClient, get_supabase_client, get_anon_client
-from app.schemas import UserCreate, UserLogin, Token, UserResponse
+from app.schemas import UserCreate, UserLogin, Token, UserResponse, RefreshTokenRequest
 from app.schemas.user import AvatarData
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -50,6 +50,7 @@ async def register(
 
         return Token(
             access_token=auth_response.session.access_token,
+            refresh_token=auth_response.session.refresh_token,
             token_type="bearer",
             user=user
         )
@@ -96,6 +97,7 @@ async def login(
 
         return Token(
             access_token=auth_response.session.access_token,
+            refresh_token=auth_response.session.refresh_token,
             token_type="bearer",
             user=user
         )
@@ -104,6 +106,52 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
+        )
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(
+    request: RefreshTokenRequest,
+    supabase: SupabaseClient = Depends(get_anon_client)
+):
+    """Refresh access token using refresh token"""
+    try:
+        auth_response = supabase.auth.refresh_session(request.refresh_token)
+
+        if not auth_response.user or not auth_response.session:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token"
+            )
+
+        # Extract avatar from user_metadata
+        avatar_data = auth_response.user.user_metadata.get("avatar")
+        avatar = None
+        if avatar_data and isinstance(avatar_data, dict):
+            avatar = AvatarData(**avatar_data)
+
+        user = UserResponse(
+            id=auth_response.user.id,
+            email=auth_response.user.email,
+            username=auth_response.user.user_metadata.get("username"),
+            avatar=avatar,
+            created_at=auth_response.user.created_at,
+            updated_at=auth_response.user.updated_at
+        )
+
+        return Token(
+            access_token=auth_response.session.access_token,
+            refresh_token=auth_response.session.refresh_token,
+            token_type="bearer",
+            user=user
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Failed to refresh token"
         )
 
 
