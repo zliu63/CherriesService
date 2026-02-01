@@ -122,9 +122,13 @@ CREATE POLICY "Quest creators can manage tasks"
     );
 
 -- Quest participants policies
-CREATE POLICY "Users can view their own participant records"
+CREATE POLICY "Users can view participants in their quests"
     ON quest_participants FOR SELECT
-    USING (user_id = auth.uid());
+    USING (
+        quest_id IN (
+            SELECT quest_id FROM quest_participants WHERE user_id = auth.uid()
+        )
+    );
 
 CREATE POLICY "Users can join quests"
     ON quest_participants FOR INSERT
@@ -151,8 +155,29 @@ CREATE POLICY "Users can delete their own check-ins"
     ON check_ins FOR DELETE
     USING (auth.uid() = user_id);
 
+-- Function to get user metadata from auth.users
+-- This is needed because auth.users is not directly accessible via the API
+CREATE OR REPLACE FUNCTION get_user_metadata(p_user_id UUID)
+RETURNS TABLE (
+    id UUID,
+    raw_user_meta_data JSONB
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE sql
+AS $$
+    SELECT id, raw_user_meta_data
+    FROM auth.users
+    WHERE id = p_user_id;
+$$;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION get_user_metadata(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_metadata(UUID) TO service_role;
+
 -- Comments for documentation
 COMMENT ON TABLE quests IS 'Main quests table containing quest information';
 COMMENT ON TABLE daily_tasks IS 'Daily tasks associated with quests';
 COMMENT ON TABLE quest_participants IS 'Users participating in quests';
 COMMENT ON TABLE check_ins IS 'Daily check-ins completed by users';
+COMMENT ON FUNCTION get_user_metadata IS 'Retrieves user metadata from auth.users for displaying participant info';

@@ -8,10 +8,50 @@ from app.schemas import (
     QuestCreate,
     QuestResponse,
     QuestJoinRequest,
-    QuestParticipantResponse
+    QuestParticipantResponse,
+    ParticipantUserResponse
 )
 
 router = APIRouter(prefix="/quests", tags=["Quests"])
+
+
+async def get_quest_participants(supabase: SupabaseClient, quest_id: str) -> List[ParticipantUserResponse]:
+    """Fetch participants for a quest with user metadata (username, avatar)"""
+    # Get participants for this quest
+    participants_response = supabase.table("quest_participants")\
+        .select("user_id, joined_at, total_points")\
+        .eq("quest_id", quest_id)\
+        .execute()
+
+    if not participants_response.data:
+        return []
+
+    participants = []
+    for p in participants_response.data:
+        # Get user metadata from auth.users
+        user_response = supabase.rpc(
+            "get_user_metadata",
+            {"p_user_id": p["user_id"]}
+        ).execute()
+
+        username = None
+        avatar = None
+        if user_response.data and len(user_response.data) > 0:
+            user_meta = user_response.data[0]
+            if user_meta.get("raw_user_meta_data"):
+                metadata = user_meta["raw_user_meta_data"]
+                username = metadata.get("username")
+                avatar = metadata.get("avatar")
+
+        participants.append(ParticipantUserResponse(
+            user_id=p["user_id"],
+            username=username,
+            avatar=avatar,
+            joined_at=p["joined_at"],
+            total_points=p.get("total_points", 0)
+        ))
+
+    return participants
 
 
 @router.post("", response_model=QuestResponse, status_code=status.HTTP_201_CREATED)
@@ -57,6 +97,10 @@ async def create_quest(
         }).execute()
 
         quest["daily_tasks"] = daily_tasks
+
+        # Fetch participants with user info
+        quest["participants"] = await get_quest_participants(supabase, quest["id"])
+
         return quest
 
     except Exception as e:
@@ -93,7 +137,13 @@ async def get_user_quests(
             .in_("id", quest_ids)\
             .execute()
 
-        return quests.data
+        # Add participants to each quest
+        result = []
+        for quest in quests.data:
+            quest["participants"] = await get_quest_participants(supabase, quest["id"])
+            result.append(quest)
+
+        return result
 
     except Exception as e:
         raise HTTPException(
@@ -130,7 +180,10 @@ async def get_quest(
             .single()\
             .execute()
 
-        return quest.data
+        quest_data = quest.data
+        quest_data["participants"] = await get_quest_participants(supabase, quest_id)
+
+        return quest_data
 
     except HTTPException:
         raise
@@ -141,7 +194,7 @@ async def get_quest(
         )
 
 
-@router.post("/join", response_model=QuestParticipantResponse)
+@router.post("/join", response_model=QuestResponse)
 async def join_quest(
     join_data: QuestJoinRequest,
     user: CherriesUser = Depends(get_user),
@@ -149,9 +202,9 @@ async def join_quest(
 ):
     """Join a quest using share code"""
     try:
-        # Find quest by share code
+        # Find quest by share code with daily tasks
         quest = supabase.table("quests")\
-            .select("*")\
+            .select("*, daily_tasks(*)")\
             .eq("share_code", join_data.share_code)\
             .single()\
             .execute()
@@ -185,12 +238,16 @@ async def join_quest(
             )
 
         # Add user as participant
-        participant = supabase.table("quest_participants").insert({
+        supabase.table("quest_participants").insert({
             "quest_id": quest.data["id"],
             "user_id": user.id
         }).execute()
 
-        return participant.data[0]
+        # Return full quest with participants
+        quest_data = quest.data
+        quest_data["participants"] = await get_quest_participants(supabase, quest_data["id"])
+
+        return quest_data
 
     except HTTPException:
         raise

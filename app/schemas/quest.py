@@ -1,6 +1,17 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import date, datetime
+
+
+class ParticipantUserResponse(BaseModel):
+    """Participant information for display in quest cards"""
+    user_id: str
+    username: Optional[str] = None
+    avatar: Optional[dict] = None  # {"type": "emoji", "value": "🐶"}
+    joined_at: datetime
+    total_points: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DailyTaskBase(BaseModel):
@@ -40,6 +51,7 @@ class QuestResponse(QuestBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     daily_tasks: List[DailyTaskResponse] = []
+    participants: List[ParticipantUserResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

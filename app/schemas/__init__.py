@@ -14,7 +14,8 @@ from .quest import (
     QuestCreate,
     QuestResponse,
     QuestJoinRequest,
-    QuestParticipantResponse
+    QuestParticipantResponse,
+    ParticipantUserResponse
 )
 from .checkin import (
     CheckInCreate,
@@ -37,6 +38,7 @@ __all__ = [
     "QuestResponse",
     "QuestJoinRequest",
     "QuestParticipantResponse",
+    "ParticipantUserResponse",
     "CheckInCreate",
     "CheckInResponse",
     "CheckInStats",
