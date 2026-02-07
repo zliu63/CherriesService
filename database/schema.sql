@@ -45,9 +45,10 @@ CREATE TABLE IF NOT EXISTS check_ins (
     quest_id UUID NOT NULL REFERENCES quests(id) ON DELETE CASCADE,
     daily_task_id UUID NOT NULL REFERENCES daily_tasks(id) ON DELETE CASCADE,
     check_in_date DATE NOT NULL,
-    points_earned INTEGER NOT NULL CHECK (points_earned > 0),
+    count INTEGER NOT NULL DEFAULT 1 CHECK (count > 0),
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE (user_id, daily_task_id, check_in_date)
 );
 
@@ -73,6 +74,12 @@ $$ LANGUAGE plpgsql;
 -- Trigger to auto-update updated_at for quests
 CREATE TRIGGER update_quests_updated_at
     BEFORE UPDATE ON quests
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger to auto-update updated_at for check_ins
+CREATE TRIGGER update_check_ins_updated_at
+    BEFORE UPDATE ON check_ins
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

@@ -16,9 +16,10 @@ class CheckInResponse(BaseModel):
     quest_id: str
     daily_task_id: str
     check_in_date: date
-    points_earned: int
+    count: int
     notes: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

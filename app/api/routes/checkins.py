@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from typing import List, Optional
 from datetime import date
 
 from app.core.auth_context import CherriesUser, get_user
@@ -9,13 +9,13 @@ from app.schemas import CheckInCreate, CheckInResponse, CheckInStats
 router = APIRouter(prefix="/checkins", tags=["Check-ins"])
 
 
-@router.post("", response_model=CheckInResponse, status_code=status.HTTP_201_CREATED)
-async def create_checkin(
+@router.post("/increment", response_model=CheckInResponse)
+async def increment_checkin(
     checkin_data: CheckInCreate,
     user: CherriesUser = Depends(get_user),
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
-    """Create a new check-in"""
+    """Increment check-in count. Creates new record if not exists, otherwise increments count."""
     try:
         # Verify user is a participant of the quest
         participant = supabase.table("quest_participants")\
@@ -23,25 +23,10 @@ async def create_checkin(
             .eq("quest_id", checkin_data.quest_id)\
             .eq("user_id", user.id)\
             .execute()
-
         if not participant.data:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not a participant of this quest"
-            )
-
-        # Check if already checked in for this task today
-        existing = supabase.table("check_ins")\
-            .select("*")\
-            .eq("user_id", user.id)\
-            .eq("daily_task_id", checkin_data.daily_task_id)\
-            .eq("check_in_date", checkin_data.check_in_date.isoformat())\
-            .execute()
-
-        if existing.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Already checked in for this task today"
             )
 
         # Get task points
@@ -53,15 +38,31 @@ async def create_checkin(
 
         points_earned = task.data["points"]
 
-        # Create check-in
-        checkin = supabase.table("check_ins").insert({
-            "user_id": user.id,
-            "quest_id": checkin_data.quest_id,
-            "daily_task_id": checkin_data.daily_task_id,
-            "check_in_date": checkin_data.check_in_date.isoformat(),
-            "points_earned": points_earned,
-            "notes": checkin_data.notes
-        }).execute()
+        # Check if check-in already exists for this user/task/date
+        existing = supabase.table("check_ins")\
+            .select("*")\
+            .eq("user_id", user.id)\
+            .eq("daily_task_id", checkin_data.daily_task_id)\
+            .eq("check_in_date", checkin_data.check_in_date.isoformat())\
+            .execute()
+
+        if existing.data:
+            # Increment existing check-in count
+            current_count = existing.data[0]["count"]
+            checkin = supabase.table("check_ins")\
+                .update({"count": current_count + 1})\
+                .eq("id", existing.data[0]["id"])\
+                .execute()
+        else:
+            # Create new check-in with count=1
+            checkin = supabase.table("check_ins").insert({
+                "user_id": user.id,
+                "quest_id": checkin_data.quest_id,
+                "daily_task_id": checkin_data.daily_task_id,
+                "check_in_date": checkin_data.check_in_date.isoformat(),
+                "count": 1,
+                "notes": checkin_data.notes
+            }).execute()
 
         # Update participant's total points
         current_points = participant.data[0]["total_points"]
@@ -72,6 +73,87 @@ async def create_checkin(
             .execute()
 
         return checkin.data[0]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/decrement", response_model=Optional[CheckInResponse])
+async def decrement_checkin(
+    checkin_data: CheckInCreate,
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client)
+):
+    """Decrement check-in count. If count becomes 0, deletes the record. Returns null if deleted."""
+    try:
+        # Verify user is a participant of the quest
+        participant = supabase.table("quest_participants")\
+            .select("*")\
+            .eq("quest_id", checkin_data.quest_id)\
+            .eq("user_id", user.id)\
+            .execute()
+        if not participant.data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a participant of this quest"
+            )
+
+        # Get task points
+        task = supabase.table("daily_tasks")\
+            .select("points")\
+            .eq("id", checkin_data.daily_task_id)\
+            .single()\
+            .execute()
+
+        points_to_subtract = task.data["points"]
+
+        # Check if check-in exists for this user/task/date
+        existing = supabase.table("check_ins")\
+            .select("*")\
+            .eq("user_id", user.id)\
+            .eq("daily_task_id", checkin_data.daily_task_id)\
+            .eq("check_in_date", checkin_data.check_in_date.isoformat())\
+            .execute()
+
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Check-in not found"
+            )
+
+        current_count = existing.data[0]["count"]
+        checkin_id = existing.data[0]["id"]
+
+        if current_count > 1:
+            # Decrement count
+            checkin = supabase.table("check_ins")\
+                .update({"count": current_count - 1})\
+                .eq("id", checkin_id)\
+                .execute()
+            result = checkin.data[0]
+        else:
+            # Delete the record when count would become 0
+            supabase.table("check_ins")\
+                .delete()\
+                .eq("id", checkin_id)\
+                .execute()
+            result = None
+
+        # Subtract points from participant's total
+        current_points = participant.data[0]["total_points"]
+        new_points = max(0, current_points - points_to_subtract)
+        supabase.table("quest_participants")\
+            .update({"total_points": new_points})\
+            .eq("quest_id", checkin_data.quest_id)\
+            .eq("user_id", user.id)\
+            .execute()
+
+        return result
 
     except HTTPException:
         raise
@@ -151,7 +233,7 @@ async def get_checkin_stats(
             .order("check_in_date", desc=False)\
             .execute()
 
-        total_check_ins = len(checkins.data)
+        total_check_ins = sum(c.get("count", 1) for c in checkins.data)
         total_points = participant.data[0]["total_points"]
 
         # Calculate streaks
