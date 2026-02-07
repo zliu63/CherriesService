@@ -167,10 +167,11 @@ async def decrement_checkin(
 @router.get("/quest/{quest_id}", response_model=List[CheckInResponse])
 async def get_quest_checkins(
     quest_id: str,
+    date: Optional[date] = None,
     user: CherriesUser = Depends(get_user),
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
-    """Get all check-ins for a quest"""
+    """Get check-ins for a quest. If date is provided, returns check-ins for that month only."""
     try:
         # Verify user is a participant
         participant = supabase.table("quest_participants")\
@@ -185,13 +186,24 @@ async def get_quest_checkins(
                 detail="Not a participant of this quest"
             )
 
-        # Get check-ins
-        checkins = supabase.table("check_ins")\
+        # Build query
+        query = supabase.table("check_ins")\
             .select("*")\
             .eq("quest_id", quest_id)\
-            .eq("user_id", user.id)\
-            .order("check_in_date", desc=True)\
-            .execute()
+            .eq("user_id", user.id)
+
+        # Filter by month if date is provided
+        if date:
+            first_day = date.replace(day=1)
+            if date.month == 12:
+                last_day = date.replace(year=date.year + 1, month=1, day=1)
+            else:
+                last_day = date.replace(month=date.month + 1, day=1)
+
+            query = query.gte("check_in_date", first_day.isoformat())\
+                         .lt("check_in_date", last_day.isoformat())
+
+        checkins = query.order("check_in_date", desc=True).execute()
 
         return checkins.data
 
