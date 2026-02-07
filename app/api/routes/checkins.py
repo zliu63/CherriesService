@@ -36,7 +36,7 @@ async def increment_checkin(
             .single()\
             .execute()
 
-        points_earned = task.data["points"]
+        points_to_add = task.data["points"]
 
         # Check if check-in already exists for this user/task/date
         existing = supabase.table("check_ins")\
@@ -67,7 +67,7 @@ async def increment_checkin(
         # Update participant's total points
         current_points = participant.data[0]["total_points"]
         supabase.table("quest_participants")\
-            .update({"total_points": current_points + points_earned})\
+            .update({"total_points": current_points + points_to_add})\
             .eq("quest_id", checkin_data.quest_id)\
             .eq("user_id", user.id)\
             .execute()
