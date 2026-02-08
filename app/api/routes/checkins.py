@@ -4,6 +4,7 @@ from datetime import date
 
 from app.core.auth_context import CherriesUser, get_user
 from app.core.supabase import SupabaseClient, get_supabase_client
+from app.core.connection_manager import manager as connection_manager
 from app.schemas import CheckInCreate, CheckInResponse, CheckInStats
 
 router = APIRouter(prefix="/checkins", tags=["Check-ins"])
@@ -71,6 +72,11 @@ async def increment_checkin(
             .eq("quest_id", checkin_data.quest_id)\
             .eq("user_id", user.id)\
             .execute()
+
+        await connection_manager.broadcast(
+            checkin_data.quest_id,
+            {"type": "scoreboard_update", "quest_id": checkin_data.quest_id},
+        )
 
         return checkin.data[0]
 
@@ -152,6 +158,11 @@ async def decrement_checkin(
             .eq("quest_id", checkin_data.quest_id)\
             .eq("user_id", user.id)\
             .execute()
+
+        await connection_manager.broadcast(
+            checkin_data.quest_id,
+            {"type": "scoreboard_update", "quest_id": checkin_data.quest_id},
+        )
 
         return result
 
