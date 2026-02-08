@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from supabase_auth.errors import AuthApiError
 
 from app.core.auth_context import CherriesUser, get_user
 from app.core.supabase import SupabaseClient, get_supabase_client, get_anon_client
@@ -148,9 +149,14 @@ async def refresh_token(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except AuthApiError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to refresh token"
         )
 
