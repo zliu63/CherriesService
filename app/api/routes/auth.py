@@ -12,7 +12,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
-    supabase: SupabaseClient = Depends(get_anon_client)
+    supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Register a new user"""
     try:
@@ -22,40 +22,47 @@ async def register(
             "value": "🐶"
         }
 
-        # Sign up user with Supabase Auth
-        auth_response = supabase.auth.sign_up({
+        # Create user via Admin API (auto-confirms, skips confirmation email)
+        admin_response = supabase.auth.admin.create_user({
             "email": user_data.email,
             "password": user_data.password,
-            "options": {
-                "data": {
-                    "username": user_data.username,
-                    "avatar": default_avatar
-                }
+            "email_confirm": True,
+            "user_metadata": {
+                "username": user_data.username,
+                "avatar": default_avatar
             }
         })
-
-        if not auth_response.user:
+        if not admin_response.user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create user"
             )
 
+        # Sign in to get a session with tokens
+        anon = get_anon_client()
+        login_response = anon.auth.sign_in_with_password({
+            "email": user_data.email,
+            "password": user_data.password
+        })
+
         user = UserResponse(
-            id=auth_response.user.id,
-            email=auth_response.user.email,
+            id=admin_response.user.id,
+            email=admin_response.user.email,
             username=user_data.username,
             avatar=AvatarData(**default_avatar),
-            created_at=auth_response.user.created_at,
-            updated_at=auth_response.user.updated_at
+            created_at=admin_response.user.created_at,
+            updated_at=admin_response.user.updated_at
         )
 
         return Token(
-            access_token=auth_response.session.access_token,
-            refresh_token=auth_response.session.refresh_token,
+            access_token=login_response.session.access_token,
+            refresh_token=login_response.session.refresh_token,
             token_type="bearer",
             user=user
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
