@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth_context import CherriesUser, get_user
+from app.core.logging import logger
 from app.core.supabase import SupabaseClient, get_supabase_client
 from app.schemas.user import UserResponse, UserUpdate, AvatarData
 
@@ -40,6 +41,7 @@ async def update_profile(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Update user profile (avatar, username)"""
+    logger.info("Update profile: user_id=%s", user.id)
     try:
         # Get current user metadata
         user_metadata = dict(user.user_metadata) if user.user_metadata else {}
@@ -74,6 +76,7 @@ async def update_profile(
         )
 
     except Exception as e:
+        logger.error("Update profile failed for user_id=%s: %s", user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)

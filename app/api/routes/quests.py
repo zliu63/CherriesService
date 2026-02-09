@@ -3,6 +3,7 @@ from typing import List
 from datetime import datetime
 
 from app.core.auth_context import CherriesUser, get_user
+from app.core.logging import logger
 from app.core.supabase import SupabaseClient, get_supabase_client
 from app.core.utils import generate_share_code, get_share_code_expiry, is_share_code_valid
 from app.schemas import (
@@ -62,6 +63,7 @@ async def create_quest(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Create a new quest"""
+    logger.info("Create quest: user_id=%s, name=%s", user.id, quest_data.name)
     try:
         # Generate unique share code
         share_code = generate_share_code()
@@ -105,9 +107,7 @@ async def create_quest(
         return quest
 
     except Exception as e:
-        import traceback
-        print(f"Error : {e}")
-        traceback.print_exc()
+        logger.error("Create quest failed for user_id=%s: %s", user.id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -120,6 +120,7 @@ async def get_user_quests(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Get all quests for the current user"""
+    logger.debug("Get quests: user_id=%s", user.id)
     try:
         # Get quest IDs for user
         participants = supabase.table("quest_participants")\
@@ -144,9 +145,11 @@ async def get_user_quests(
             quest["participants"] = await get_quest_participants(supabase, quest["id"])
             result.append(quest)
 
+        logger.debug("Returning %d quests for user_id=%s", len(result), user.id)
         return result
 
     except Exception as e:
+        logger.error("Get quests failed for user_id=%s: %s", user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -202,6 +205,7 @@ async def join_quest(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Join a quest using share code"""
+    logger.info("Join quest: user_id=%s, share_code=%s", user.id, join_data.share_code)
     try:
         # Find quest by share code with daily tasks
         quest = supabase.table("quests")\
@@ -247,11 +251,13 @@ async def join_quest(
         quest_data = quest.data
         quest_data["participants"] = await get_quest_participants(supabase, quest_data["id"])
 
+        logger.info("User %s joined quest %s", user.id, quest_data["id"])
         return quest_data
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Join quest failed for user_id=%s: %s", user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -265,6 +271,7 @@ async def leave_quest(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Leave a quest. Any participant can leave the quest."""
+    logger.info("Leave quest: user_id=%s, quest_id=%s", user.id, quest_id)
     try:
         # Verify the user is a participant of this quest
         participant = supabase.table("quest_participants")\

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from supabase_auth.errors import AuthApiError
 
 from app.core.auth_context import CherriesUser, get_user
+from app.core.logging import logger
 from app.core.supabase import SupabaseClient, get_supabase_client, get_anon_client
 from app.schemas import UserCreate, UserLogin, Token, UserResponse, RefreshTokenRequest
 from app.schemas.user import AvatarData
@@ -64,6 +65,7 @@ async def register(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Register failed for %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -111,6 +113,7 @@ async def login(
         )
 
     except Exception as e:
+        logger.warning("Login failed for %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
@@ -123,6 +126,7 @@ async def refresh_token(
     supabase: SupabaseClient = Depends(get_anon_client)
 ):
     """Refresh access token using refresh token"""
+    logger.debug("Token refresh requested")
     try:
         auth_response = supabase.auth.refresh_session(request.refresh_token)
 
@@ -162,6 +166,7 @@ async def refresh_token(
             detail="Invalid or expired refresh token"
         )
     except Exception as e:
+        logger.error("Token refresh failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to refresh token"
@@ -174,10 +179,12 @@ async def logout(
     supabase: SupabaseClient = Depends(get_anon_client)
 ):
     """Logout user"""
+    logger.info("Logout: user_id=%s", user.id)
     try:
         supabase.auth.sign_out()
         return {"message": "Successfully logged out"}
     except Exception as e:
+        logger.error("Logout failed for user_id=%s: %s", user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)

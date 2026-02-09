@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import date
 
 from app.core.auth_context import CherriesUser, get_user
+from app.core.logging import logger
 from app.core.supabase import SupabaseClient, get_supabase_client
 from app.core.connection_manager import manager as connection_manager
 from app.schemas import CheckInCreate, CheckInResponse, CheckInStats
@@ -17,6 +18,8 @@ async def increment_checkin(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Increment check-in count. Creates new record if not exists, otherwise increments count."""
+    logger.info("Checkin increment: user_id=%s, quest=%s, task=%s, date=%s",
+                user.id, checkin_data.quest_id, checkin_data.daily_task_id, checkin_data.check_in_date)
     try:
         # Verify user is a participant of the quest
         participant = supabase.table("quest_participants")\
@@ -83,6 +86,7 @@ async def increment_checkin(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Checkin increment failed: user_id=%s, %s", user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -96,6 +100,8 @@ async def decrement_checkin(
     supabase: SupabaseClient = Depends(get_supabase_client)
 ):
     """Decrement check-in count. If count becomes 0, deletes the record. Returns null if deleted."""
+    logger.info("Checkin decrement: user_id=%s, quest=%s, task=%s, date=%s",
+                user.id, checkin_data.quest_id, checkin_data.daily_task_id, checkin_data.check_in_date)
     try:
         # Verify user is a participant of the quest
         participant = supabase.table("quest_participants")\
@@ -169,6 +175,7 @@ async def decrement_checkin(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Checkin decrement failed: user_id=%s, %s", user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)

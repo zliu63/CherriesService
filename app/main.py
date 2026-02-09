@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+import time
+
 from app.core.config import settings
+from app.core.logging import logger
 from app.api.routes import auth_router, quests_router, checkins_router, profile_router, connection_router
 
 
@@ -32,6 +35,17 @@ def create_app() -> FastAPI:
     app.include_router(profile_router, prefix=settings.API_PREFIX)
     app.include_router(connection_router, prefix=settings.API_PREFIX)
 
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "%s %s -> %d (%.1fms)",
+            request.method, request.url.path, response.status_code, elapsed_ms,
+        )
+        return response
+
     @app.get("/")
     async def root():
         return {
@@ -44,6 +58,7 @@ def create_app() -> FastAPI:
     async def health_check():
         return {"status": "healthy"}
 
+    logger.info("CherriesService %s started (debug=%s)", settings.APP_VERSION, settings.DEBUG)
     return app
 
 
