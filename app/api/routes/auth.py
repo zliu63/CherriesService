@@ -173,6 +173,37 @@ async def refresh_token(
         )
 
 
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    user: CherriesUser = Depends(get_user),
+    supabase: SupabaseClient = Depends(get_supabase_client),
+):
+    """Delete the current user's account and all associated data."""
+    logger.info("Delete account: user_id=%s", user.id)
+    try:
+        # 1. Delete quests created by user (cascades to daily_tasks)
+        supabase.table("quests").delete().eq("creator_id", user.id).execute()
+
+        # 2. Delete quest participations for quests user joined but didn't create
+        supabase.table("quest_participants").delete().eq("user_id", user.id).execute()
+
+        # 3. Delete check-ins
+        supabase.table("check_ins").delete().eq("user_id", user.id).execute()
+
+        # 4. Delete user from Supabase auth
+        supabase.auth.admin.delete_user(user.id)
+
+        logger.info("Account deleted: user_id=%s", user.id)
+        return None
+
+    except Exception as e:
+        logger.error("Delete account failed for user_id=%s: %s", user.id, e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account",
+        )
+
+
 @router.post("/logout")
 async def logout(
     user: CherriesUser = Depends(get_user),
